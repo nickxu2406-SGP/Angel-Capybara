@@ -23,15 +23,15 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: cd capybara-game && npm ci
+        run: npm ci
 
       - name: Build
-        run: cd capybara-game && npm run build
+        run: npm run build
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: capybara-game/dist
+          publish_dir: ./dist
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'

@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -9,4 +13,27 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Mobile portrait: use viewport height for game area */
+@media (max-width: 768px) and (orientation: portrait) {
+  .game-area {
+    height: 55vh !important;
+  }
+}
+
+/* Landscape mobile: constrain max dimensions */
+@media (max-width: 768px) and (orientation: landscape) {
+  .game-area {
+    height: 70vh !important;
+  }
+}
+
+/* Scrollable game container on small screens */
+@media (max-width: 768px) {
+  .game-wrapper {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
