@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import yangyangImg from '/yangyang.png'
 import momImg from '/mom.png'
+import dengdengImg from '/dengdeng.png'
 
-type GameLevel = 0 | 1 | 2
-type GameState = 'menu' | 'playing' | 'won'
+type GameLevel = 0 | 1 | 2 | 3
+type GameState = 'menu' | 'playing' | 'won' | 'failed'
 type Winner = 'yangyang' | 'mom' | null
 
 // 第一关：喂水果
@@ -32,6 +33,12 @@ function App() {
   const [winner, setWinner] = useState<Winner>(null)
   const [capybaraTarget, setCapybaraTarget] = useState<'left' | 'right' | 'center'>('center')
 
+  // 第三关状态
+  const [dengdengScore, setDengdengScore] = useState(0)
+  const [level3TimeLeft, setLevel3TimeLeft] = useState(20)
+  const [showPunishment, setShowPunishment] = useState(false)
+  const level3TimerRef = useRef<NodeJS.Timeout | null>(null)
+
   const gameAreaRef = useRef<HTMLDivElement>(null)
 
   // 第一关常量
@@ -43,6 +50,11 @@ function App() {
   // 第二关常量
   const SCORE_TO_WIN = 100
   const FOOD_SCORE = 10
+
+  // 第三关常量
+  const LEVEL3_TARGET = 100
+  const LEVEL3_TIME = 20
+  const BAOZI_SCORE = 10
 
   // 第一关逻辑
   useEffect(() => {
@@ -76,6 +88,35 @@ function App() {
     }
   }, [gameLevel, gameState, yangyangScore, momScore])
 
+  // 第三关：倒计时逻辑
+  useEffect(() => {
+    if (gameLevel === 3 && gameState === 'playing') {
+      level3TimerRef.current = setInterval(() => {
+        setLevel3TimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(level3TimerRef.current!)
+            setGameState('failed')
+            setShowPunishment(true)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+      
+      return () => {
+        if (level3TimerRef.current) clearInterval(level3TimerRef.current)
+      }
+    }
+  }, [gameLevel, gameState])
+
+  // 第三关：检查获胜
+  useEffect(() => {
+    if (gameLevel === 3 && gameState === 'playing' && dengdengScore >= LEVEL3_TARGET) {
+      if (level3TimerRef.current) clearInterval(level3TimerRef.current)
+      setGameState('won')
+    }
+  }, [gameLevel, gameState, dengdengScore])
+
   const spawnFruit = () => {
     const newFruit: Fruit = {
       id: Date.now(),
@@ -107,6 +148,14 @@ function App() {
     setCapybaraTarget('center')
   }
 
+  const startLevel3 = () => {
+    setGameLevel(3)
+    setGameState('playing')
+    setDengdengScore(0)
+    setLevel3TimeLeft(LEVEL3_TIME)
+    setShowPunishment(false)
+  }
+
   const handleFruitClick = () => {
     if (!currentFruit || gameState !== 'playing') return
 
@@ -133,6 +182,11 @@ function App() {
     setMomScore(prev => Math.min(SCORE_TO_WIN, prev + FOOD_SCORE))
   }
 
+  const handleDengdengEat = () => {
+    if (gameState !== 'playing') return
+    setDengdengScore(prev => Math.min(LEVEL3_TARGET, prev + BAOZI_SCORE))
+  }
+
   const getFruitEmoji = (type: string) => {
     const emojis = {
       apple: '🍎',
@@ -146,6 +200,7 @@ function App() {
   const backToMenu = () => {
     setGameLevel(0)
     setGameState('menu')
+    setShowPunishment(false)
   }
 
   return (
@@ -157,30 +212,40 @@ function App() {
           <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8 text-center">
             <h1 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6 text-gray-800">🌿 卡皮巴拉乐园 🌿</h1>
             
-            <div className="flex justify-center items-center gap-4 sm:gap-8 mb-6 sm:mb-8">
+            <div className="flex justify-center items-center gap-2 sm:gap-4 mb-6 sm:mb-8 flex-wrap">
               <div className="flex flex-col items-center">
-                <img src={yangyangImg} alt="洋洋" className="w-14 h-14 sm:w-20 sm:h-20 rounded-full object-cover border-4 border-yellow-400 shadow" />
+                <img src={yangyangImg} alt="洋洋" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-3 border-yellow-400 shadow" />
                 <span className="text-xs sm:text-sm font-bold text-purple-600 mt-1">洋洋</span>
               </div>
-              <div className="text-4xl sm:text-6xl">🦫</div>
               <div className="flex flex-col items-center">
-                <img src={momImg} alt="妈妈" className="w-14 h-14 sm:w-20 sm:h-20 rounded-full object-cover border-4 border-pink-400 shadow" />
+                <img src={dengdengImg} alt="等等" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-3 border-blue-400 shadow" />
+                <span className="text-xs sm:text-sm font-bold text-blue-600 mt-1">等等</span>
+              </div>
+              <div className="text-3xl sm:text-5xl">🦫</div>
+              <div className="flex flex-col items-center">
+                <img src={momImg} alt="妈妈" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-3 border-pink-400 shadow" />
                 <span className="text-xs sm:text-sm font-bold text-pink-600 mt-1">妈妈</span>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               <button
                 onClick={startLevel1}
-                className="w-full px-6 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-green-600 hover:to-green-700 transform hover:scale-105 transition-all shadow-lg"
+                className="w-full px-6 py-3 sm:py-4 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg sm:text-2xl font-bold rounded-full hover:from-green-600 hover:to-green-700 transform hover:scale-105 transition-all shadow-lg"
               >
                 第一关：喂卡皮巴拉 🍎
               </button>
               <button
                 onClick={startLevel2}
-                className="w-full px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-purple-600 hover:to-pink-600 transform hover:scale-105 transition-all shadow-lg"
+                className="w-full px-6 py-3 sm:py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-lg sm:text-2xl font-bold rounded-full hover:from-purple-600 hover:to-pink-600 transform hover:scale-105 transition-all shadow-lg"
               >
                 第二关：吃饭比赛 🍕🥟
+              </button>
+              <button
+                onClick={startLevel3}
+                className="w-full px-6 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-lg sm:text-2xl font-bold rounded-full hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                第三关：监督吃饭 👀🥟
               </button>
             </div>
           </div>
@@ -371,10 +436,171 @@ function App() {
 
             <div className="space-y-3">
               <button
+                onClick={startLevel3}
+                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                进入第三关 ➡️
+              </button>
+              <button
                 onClick={startLevel2}
-                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-purple-600 hover:to-pink-600 transform hover:scale-105 transition-all shadow-lg"
+                className="w-full px-6 py-3 bg-purple-500 text-white text-lg font-bold rounded-full hover:bg-purple-600 transition-all"
               >
                 再比一次 🔄
+              </button>
+              <button
+                onClick={backToMenu}
+                className="w-full px-6 py-3 bg-gray-200 text-gray-700 text-lg font-bold rounded-full hover:bg-gray-300 transition-all"
+              >
+                返回菜单
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 第三关：监督吃饭 */}
+        {gameLevel === 3 && gameState === 'playing' && (
+          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-500 to-cyan-500 p-2 sm:p-4 text-center">
+              <div className="text-white text-lg sm:text-2xl font-bold mb-2">
+                👀 洋洋监督等等吃饭 - {LEVEL3_TIME}秒内吃完{LEVEL3_TARGET}分！
+              </div>
+              <div className="flex justify-center items-center gap-6 sm:gap-12">
+                <div className="text-yellow-300 text-xl sm:text-3xl font-bold">
+                  得分: {dengdengScore}
+                </div>
+                <div className={`text-xl sm:text-3xl font-bold ${level3TimeLeft <= 5 ? 'text-red-300 animate-pulse' : 'text-white'}`}>
+                  ⏱️ {level3TimeLeft}s
+                </div>
+              </div>
+            </div>
+
+            <div className="relative game-area h-[50vh] sm:h-[60vh] md:h-[500px] bg-gradient-to-b from-blue-100 to-cyan-100 overflow-hidden">
+              {/* 洋洋在左边监督 */}
+              <div className="absolute left-4 sm:left-8 top-1/2 transform -translate-y-1/2 flex flex-col items-center">
+                <img
+                  src={yangyangImg}
+                  alt="洋洋"
+                  className="w-16 sm:w-24 h-16 sm:h-24 rounded-full object-cover border-4 border-yellow-400 shadow-lg"
+                />
+                <p className="text-sm sm:text-lg font-bold text-purple-600 mt-2">洋洋监督</p>
+                <div className="text-2xl sm:text-4xl mt-2">👀</div>
+              </div>
+
+              {/* 等等在中间吃包子 */}
+              <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+                <img
+                  src={dengdengImg}
+                  alt="等等"
+                  className="w-20 sm:w-32 h-20 sm:h-32 rounded-full object-cover border-4 border-blue-400 shadow-lg mb-4"
+                />
+                <p className="text-lg sm:text-xl font-bold text-blue-600 mb-4">等等</p>
+                
+                {/* 包子按钮 */}
+                <button
+                  onClick={handleDengdengEat}
+                  className="text-6xl sm:text-8xl cursor-pointer hover:scale-110 active:scale-95 transition-transform animate-bounce"
+                >
+                  🥟
+                </button>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-600 mt-4">{dengdengScore} / {LEVEL3_TARGET}</p>
+                <p className="text-sm sm:text-base text-gray-500 mt-2">点击包子让等等吃！</p>
+              </div>
+
+              {/* 进度条 */}
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-3/4 sm:w-1/2">
+                <div className="bg-gray-200 rounded-full h-4 sm:h-6 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-blue-500 to-cyan-500 h-full transition-all duration-300"
+                    style={{ width: `${(dengdengScore / LEVEL3_TARGET) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 第三关胜利 */}
+        {gameLevel === 3 && gameState === 'won' && !showPunishment && (
+          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8 text-center">
+            <h2 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6 text-green-600">🎉 任务完成！🎉</h2>
+            
+            <div className="mb-6 sm:mb-8">
+              <div className="flex justify-center items-center gap-4 mb-6">
+                <img
+                  src={dengdengImg}
+                  alt="等等"
+                  className="w-24 sm:w-32 h-24 sm:h-32 rounded-full object-cover border-4 border-green-400 shadow-lg"
+                />
+                <div className="text-5xl sm:text-7xl">😋</div>
+              </div>
+              <p className="text-2xl sm:text-4xl font-bold text-gray-800 mb-4">
+                等等按时吃完啦！
+              </p>
+              <p className="text-xl sm:text-2xl text-gray-600">
+                用时: {LEVEL3_TIME - level3TimeLeft} 秒
+              </p>
+              <div className="mt-6 text-lg sm:text-xl text-gray-500">
+                洋洋很满意！👍
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={startLevel3}
+                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                再玩一次 🔄
+              </button>
+              <button
+                onClick={backToMenu}
+                className="w-full px-6 py-3 bg-gray-200 text-gray-700 text-lg font-bold rounded-full hover:bg-gray-300 transition-all"
+              >
+                返回菜单
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 第三关失败 - 惩罚动画 */}
+        {gameLevel === 3 && showPunishment && (
+          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8 text-center">
+            <h2 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6 text-red-600">💥 时间到！💥</h2>
+            
+            <div className="mb-6 sm:mb-8">
+              {/* 惩罚动画 */}
+              <div className="flex justify-center items-center gap-2 sm:gap-4 mb-6 animate-pulse">
+                <img
+                  src={yangyangImg}
+                  alt="洋洋"
+                  className="w-20 sm:w-28 h-20 sm:h-28 rounded-full object-cover border-4 border-red-400 shadow-lg"
+                />
+                <div className="text-4xl sm:text-6xl">👋💥</div>
+                <img
+                  src={dengdengImg}
+                  alt="等等"
+                  className="w-20 sm:w-28 h-20 sm:h-28 rounded-full object-cover border-4 border-blue-400 shadow-lg"
+                />
+              </div>
+              
+              <div className="text-4xl sm:text-6xl mb-4">😭😭😭</div>
+              
+              <p className="text-2xl sm:text-4xl font-bold text-gray-800 mb-4">
+                等等没吃完！
+              </p>
+              <p className="text-xl sm:text-2xl text-gray-600">
+                洋洋跑过去打了等等屁股！
+              </p>
+              <div className="mt-6 text-lg sm:text-xl text-gray-500">
+                最终得分: {dengdengScore} / {LEVEL3_TARGET}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={startLevel3}
+                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                重新挑战 💪
               </button>
               <button
                 onClick={backToMenu}
