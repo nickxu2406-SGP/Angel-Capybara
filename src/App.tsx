@@ -3,7 +3,7 @@ import yangyangImg from '/yangyang.png'
 import momImg from '/mom.png'
 import dengdengImg from '/dengdeng.png'
 
-type GameLevel = 0 | 1 | 2 | 3
+type GameLevel = 0 | 1 | 2 | 3 | 4
 type GameState = 'menu' | 'playing' | 'won' | 'failed'
 type Winner = 'yangyang' | 'mom' | null
 
@@ -13,6 +13,15 @@ type Fruit = {
   x: number
   y: number
   type: 'apple' | 'banana' | 'orange' | 'grape'
+}
+
+// 第四关：人物重量
+type Character = {
+  id: string
+  name: string
+  weight: number
+  img: string
+  side: 'left' | 'right' | 'none'
 }
 
 function App() {
@@ -39,6 +48,16 @@ function App() {
   const [showPunishment, setShowPunishment] = useState(false)
   const level3TimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // 第四关状态
+  const [level4TimeLeft, setLevel4TimeLeft] = useState(30)
+  const [characters, setCharacters] = useState<Character[]>([
+    { id: 'dengdeng', name: '等等', weight: 10, img: dengdengImg, side: 'none' },
+    { id: 'capybara', name: '卡皮巴拉', weight: 5, img: '', side: 'none' },
+    { id: 'yangyang', name: '洋洋', weight: 35, img: yangyangImg, side: 'none' },
+    { id: 'mom', name: '妈妈', weight: 40, img: momImg, side: 'none' },
+  ])
+  const level4TimerRef = useRef<NodeJS.Timeout | null>(null)
+
   const gameAreaRef = useRef<HTMLDivElement>(null)
 
   // 第一关常量
@@ -55,6 +74,9 @@ function App() {
   const LEVEL3_TARGET = 100
   const LEVEL3_TIME = 20
   const BAOZI_SCORE = 10
+
+  // 第四关常量
+  const LEVEL4_TIME = 30
 
   // 第一关逻辑
   useEffect(() => {
@@ -117,6 +139,42 @@ function App() {
     }
   }, [gameLevel, gameState, dengdengScore])
 
+  // 第四关：倒计时逻辑
+  useEffect(() => {
+    if (gameLevel === 4 && gameState === 'playing') {
+      level4TimerRef.current = setInterval(() => {
+        setLevel4TimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(level4TimerRef.current!)
+            setGameState('failed')
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+      
+      return () => {
+        if (level4TimerRef.current) clearInterval(level4TimerRef.current)
+      }
+    }
+  }, [gameLevel, gameState])
+
+  // 第四关：检查平衡
+  useEffect(() => {
+    if (gameLevel === 4 && gameState === 'playing') {
+      const leftWeight = characters.filter(c => c.side === 'left').reduce((sum, c) => sum + c.weight, 0)
+      const rightWeight = characters.filter(c => c.side === 'right').reduce((sum, c) => sum + c.weight, 0)
+      
+      // 检查是否所有人都已放置
+      const allPlaced = characters.every(c => c.side !== 'none')
+      
+      if (allPlaced && leftWeight === rightWeight && leftWeight > 0) {
+        if (level4TimerRef.current) clearInterval(level4TimerRef.current)
+        setGameState('won')
+      }
+    }
+  }, [gameLevel, gameState, characters])
+
   const spawnFruit = () => {
     const newFruit: Fruit = {
       id: Date.now(),
@@ -156,6 +214,18 @@ function App() {
     setShowPunishment(false)
   }
 
+  const startLevel4 = () => {
+    setGameLevel(4)
+    setGameState('playing')
+    setLevel4TimeLeft(LEVEL4_TIME)
+    setCharacters([
+      { id: 'dengdeng', name: '等等', weight: 10, img: dengdengImg, side: 'none' },
+      { id: 'capybara', name: '卡皮巴拉', weight: 5, img: '', side: 'none' },
+      { id: 'yangyang', name: '洋洋', weight: 35, img: yangyangImg, side: 'none' },
+      { id: 'mom', name: '妈妈', weight: 40, img: momImg, side: 'none' },
+    ])
+  }
+
   const handleFruitClick = () => {
     if (!currentFruit || gameState !== 'playing') return
 
@@ -187,6 +257,13 @@ function App() {
     setDengdengScore(prev => Math.min(LEVEL3_TARGET, prev + BAOZI_SCORE))
   }
 
+  // 第四关：移动人物
+  const moveCharacter = (id: string, targetSide: 'left' | 'right' | 'none') => {
+    setCharacters(prev => prev.map(c => 
+      c.id === id ? { ...c, side: targetSide } : c
+    ))
+  }
+
   const getFruitEmoji = (type: string) => {
     const emojis = {
       apple: '🍎',
@@ -201,6 +278,15 @@ function App() {
     setGameLevel(0)
     setGameState('menu')
     setShowPunishment(false)
+  }
+
+  // 第四关：计算跷跷板倾斜角度
+  const getSeesawAngle = () => {
+    const leftWeight = characters.filter(c => c.side === 'left').reduce((sum, c) => sum + c.weight, 0)
+    const rightWeight = characters.filter(c => c.side === 'right').reduce((sum, c) => sum + c.weight, 0)
+    const diff = rightWeight - leftWeight
+    // 最大倾斜15度
+    return Math.max(-15, Math.min(15, diff * 0.5))
   }
 
   return (
@@ -246,6 +332,12 @@ function App() {
                 className="w-full px-6 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-lg sm:text-2xl font-bold rounded-full hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all shadow-lg"
               >
                 第三关：监督吃饭 👀🥟
+              </button>
+              <button
+                onClick={startLevel4}
+                className="w-full px-6 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-lg sm:text-2xl font-bold rounded-full hover:from-orange-600 hover:to-yellow-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                第四关：跷跷板平衡 ⚖️
               </button>
             </div>
           </div>
@@ -546,8 +638,14 @@ function App() {
 
             <div className="space-y-3">
               <button
+                onClick={startLevel4}
+                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-orange-600 hover:to-yellow-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                进入第四关 ➡️
+              </button>
+              <button
                 onClick={startLevel3}
-                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all shadow-lg"
+                className="w-full px-6 py-3 bg-blue-500 text-white text-lg font-bold rounded-full hover:bg-blue-600 transition-all"
               >
                 再玩一次 🔄
               </button>
@@ -599,6 +697,174 @@ function App() {
               <button
                 onClick={startLevel3}
                 className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                重新挑战 💪
+              </button>
+              <button
+                onClick={backToMenu}
+                className="w-full px-6 py-3 bg-gray-200 text-gray-700 text-lg font-bold rounded-full hover:bg-gray-300 transition-all"
+              >
+                返回菜单
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 第四关：跷跷板平衡 */}
+        {gameLevel === 4 && gameState === 'playing' && (
+          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-orange-500 to-yellow-500 p-2 sm:p-4 text-center">
+              <div className="text-white text-lg sm:text-2xl font-bold mb-2">
+                ⚖️ 跷跷板平衡 - 30秒内让两边平衡！
+              </div>
+              <div className="flex justify-center items-center gap-6 sm:gap-12">
+                <div className="text-yellow-300 text-xl sm:text-3xl font-bold">
+                  左边: {characters.filter(c => c.side === 'left').reduce((sum, c) => sum + c.weight, 0)} KG
+                </div>
+                <div className={`text-xl sm:text-3xl font-bold ${level4TimeLeft <= 10 ? 'text-red-300 animate-pulse' : 'text-white'}`}>
+                  ⏱️ {level4TimeLeft}s
+                </div>
+                <div className="text-yellow-300 text-xl sm:text-3xl font-bold">
+                  右边: {characters.filter(c => c.side === 'right').reduce((sum, c) => sum + c.weight, 0)} KG
+                </div>
+              </div>
+            </div>
+
+            <div className="relative game-area h-[50vh] sm:h-[60vh] md:h-[500px] bg-gradient-to-b from-orange-100 to-yellow-100 overflow-hidden">
+              {/* 跷跷板 */}
+              <div 
+                className="absolute left-1/2 bottom-24 sm:bottom-32 transform -translate-x-1/2 transition-transform duration-500"
+                style={{ transform: `translateX(-50%) rotate(${getSeesawAngle()}deg)` }}
+              >
+                {/* 跷跷板板子 */}
+                <div className="relative w-64 sm:w-96 h-3 sm:h-4 bg-gradient-to-r from-amber-600 to-amber-700 rounded-full shadow-lg">
+                  {/* 左边放置区 */}
+                  <div className="absolute -left-2 -top-20 sm:-top-24 w-16 sm:w-20 h-20 sm:h-24 border-2 border-dashed border-orange-400 rounded-lg flex flex-col items-center justify-center bg-orange-50 bg-opacity-50">
+                    {characters.filter(c => c.side === 'left').map((c, i) => (
+                      <div key={c.id} className="flex flex-col items-center -mt-8" style={{ marginTop: i === 0 ? 0 : -40 }}>
+                        {c.id === 'capybara' ? (
+                          <div className="text-3xl sm:text-4xl">🦫</div>
+                        ) : (
+                          <img src={c.img} alt={c.name} className="w-10 sm:w-12 h-10 sm:h-12 rounded-full object-cover border-2 border-white shadow" />
+                        )}
+                        <span className="text-xs font-bold text-gray-700">{c.weight}KG</span>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* 右边放置区 */}
+                  <div className="absolute -right-2 -top-20 sm:-top-24 w-16 sm:w-20 h-20 sm:h-24 border-2 border-dashed border-orange-400 rounded-lg flex flex-col items-center justify-center bg-orange-50 bg-opacity-50">
+                    {characters.filter(c => c.side === 'right').map((c, i) => (
+                      <div key={c.id} className="flex flex-col items-center -mt-8" style={{ marginTop: i === 0 ? 0 : -40 }}>
+                        {c.id === 'capybara' ? (
+                          <div className="text-3xl sm:text-4xl">🦫</div>
+                        ) : (
+                          <img src={c.img} alt={c.name} className="w-10 sm:w-12 h-10 sm:h-12 rounded-full object-cover border-2 border-white shadow" />
+                        )}
+                        <span className="text-xs font-bold text-gray-700">{c.weight}KG</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* 支点 */}
+                <div className="absolute left-1/2 -bottom-4 sm:-bottom-6 transform -translate-x-1/2 w-0 h-0 border-l-8 sm:border-l-12 border-r-8 sm:border-r-12 border-t-12 sm:border-t-16 border-l-transparent border-r-transparent border-t-amber-800"></div>
+              </div>
+
+              {/* 人物选择区 */}
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex gap-2 sm:gap-4 flex-wrap justify-center max-w-full px-2">
+                {characters.filter(c => c.side === 'none').map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => {
+                      // 循环切换：none -> left -> right -> none
+                      const currentSide = c.side
+                      if (currentSide === 'none') {
+                        moveCharacter(c.id, 'left')
+                      } else if (currentSide === 'left') {
+                        moveCharacter(c.id, 'right')
+                      } else {
+                        moveCharacter(c.id, 'none')
+                      }
+                    }}
+                    className="flex flex-col items-center p-2 sm:p-3 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+                  >
+                    {c.id === 'capybara' ? (
+                      <div className="text-3xl sm:text-4xl">🦫</div>
+                    ) : (
+                      <img src={c.img} alt={c.name} className="w-12 sm:w-16 h-12 sm:h-16 rounded-full object-cover border-2 border-orange-400" />
+                    )}
+                    <span className="text-xs sm:text-sm font-bold text-gray-700 mt-1">{c.name}</span>
+                    <span className="text-xs font-bold text-orange-600">{c.weight}KG</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* 操作提示 */}
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-center">
+                <p className="text-sm sm:text-base text-gray-600 bg-white bg-opacity-80 rounded-lg px-4 py-2">
+                  💡 点击人物放置到跷跷板上，再次点击切换位置
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 第四关胜利 */}
+        {gameLevel === 4 && gameState === 'won' && (
+          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8 text-center">
+            <h2 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6 text-green-600">🎉 完美平衡！🎉</h2>
+            
+            <div className="mb-6 sm:mb-8">
+              <div className="text-6xl sm:text-8xl mb-6">⚖️</div>
+              <p className="text-2xl sm:text-4xl font-bold text-gray-800 mb-4">
+                跷跷板平衡啦！
+              </p>
+              <p className="text-xl sm:text-2xl text-gray-600">
+                用时: {LEVEL4_TIME - level4TimeLeft} 秒
+              </p>
+              <div className="mt-6 text-lg sm:text-xl text-gray-500">
+                两边都是 45 KG，完美平衡！
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={startLevel4}
+                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-orange-600 hover:to-yellow-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                再玩一次 🔄
+              </button>
+              <button
+                onClick={backToMenu}
+                className="w-full px-6 py-3 bg-gray-200 text-gray-700 text-lg font-bold rounded-full hover:bg-gray-300 transition-all"
+              >
+                返回菜单
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 第四关失败 */}
+        {gameLevel === 4 && gameState === 'failed' && (
+          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8 text-center">
+            <h2 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6 text-red-600">⏰ 时间到！</h2>
+            
+            <div className="mb-6 sm:mb-8">
+              <div className="text-6xl sm:text-8xl mb-6">😵</div>
+              <p className="text-2xl sm:text-4xl font-bold text-gray-800 mb-4">
+                没能在时间内平衡！
+              </p>
+              <div className="mt-6 text-lg sm:text-xl text-gray-500">
+                左边: {characters.filter(c => c.side === 'left').reduce((sum, c) => sum + c.weight, 0)} KG | 
+                右边: {characters.filter(c => c.side === 'right').reduce((sum, c) => sum + c.weight, 0)} KG
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={startLevel4}
+                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-orange-600 hover:to-yellow-600 transform hover:scale-105 transition-all shadow-lg"
               >
                 重新挑战 💪
               </button>
