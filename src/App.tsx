@@ -158,6 +158,9 @@ function App() {
   // 第六关状态
   const [level6TimeLeft, setLevel6TimeLeft] = useState(LEVEL6_TIME)
   const [poemLines, setPoemLines] = useState<PoemLine[]>([])
+  const [level6Score, setLevel6Score] = useState(100)
+  const [level6WrongCount, setLevel6WrongCount] = useState(0)
+  const [level6SubmitResult, setLevel6SubmitResult] = useState<{show: boolean; wrongPositions: {lineId: number; charIndex: number; filled: string; correct: string}[]}>({show: false, wrongPositions: []})
   const level6TimerRef = useRef<NodeJS.Timeout | null>(null)
   
   // 第六关拖拽状态
@@ -302,18 +305,7 @@ function App() {
     }
   }, [gameLevel, gameState])
 
-  // 第六关：检查获胜
-  useEffect(() => {
-    if (gameLevel === 6 && gameState === 'playing') {
-      const allFilled = poemLines.every(line => 
-        line.missingIndices.every(idx => line.filled[idx] !== null)
-      )
-      if (allFilled && poemLines.length > 0) {
-        if (level6TimerRef.current) clearInterval(level6TimerRef.current)
-        setGameState('won')
-      }
-    }
-  }, [gameLevel, gameState, poemLines])
+
 
   const spawnFruit = () => {
     const newFruit: Fruit = {
@@ -577,6 +569,9 @@ function App() {
     setPoemLines(makeLevel6Poem())
     setSelectedOption(null)
     setSelectedSlot(null)
+    setLevel6Score(100)
+    setLevel6WrongCount(0)
+    setLevel6SubmitResult({show: false, wrongPositions: []})
   }
 
   // ===== 第五关：字母拖拽处理（参考第四关做法） =====
@@ -845,17 +840,38 @@ function App() {
     )
   }
 
-  // 提交答案
+  // 提交答案 - 评分制：答错一个字扣25分，满分100
   const submitLevel6 = () => {
-    const allCorrect = poemLines.every(line => {
-      return line.missingIndices.every(idx => line.filled[idx] === line.chars[idx])
+    const wrongPositions: {lineId: number; charIndex: number; filled: string; correct: string}[] = []
+    
+    poemLines.forEach(line => {
+      line.missingIndices.forEach(idx => {
+        const filledChar = line.filled[idx]
+        const correctChar = line.chars[idx]
+        if (filledChar !== correctChar) {
+          wrongPositions.push({
+            lineId: line.id,
+            charIndex: idx,
+            filled: filledChar || '(空)',
+            correct: correctChar
+          })
+        }
+      })
     })
-    if (allCorrect) {
+    
+    const wrongCount = wrongPositions.length
+    const score = Math.max(0, 100 - wrongCount * 25)
+    
+    setLevel6WrongCount(wrongCount)
+    setLevel6Score(score)
+    setLevel6SubmitResult({show: true, wrongPositions})
+    
+    if (wrongCount === 0) {
+      // 全对，过关
       if (level6TimerRef.current) clearInterval(level6TimerRef.current)
       setGameState('won')
-    } else {
-      alert('还有错误的字，请检查后再提交！')
     }
+    // 如果有错误，显示结果但不结束游戏，玩家可以继续修改
   }
 
   return (
@@ -1798,6 +1814,30 @@ function App() {
                   <p className="text-xs text-gray-400 mt-1">先把所有字放进诗句中</p>
                 )}
               </div>
+
+              {/* 评分结果 */}
+              {level6SubmitResult.show && (
+                <div className={`mt-3 p-3 rounded-lg text-center ${level6WrongCount === 0 ? 'bg-green-100 border-2 border-green-300' : 'bg-red-100 border-2 border-red-300'}`}>
+                  <div className="text-2xl font-bold mb-1">
+                    {level6WrongCount === 0 ? (
+                      <span className="text-green-600">🎉 满分100分！全部正确！</span>
+                    ) : (
+                      <span className="text-red-600">得分: {level6Score}分</span>
+                    )}
+                  </div>
+                  {level6WrongCount > 0 && (
+                    <div className="text-sm">
+                      <p className="text-red-600 font-bold mb-1">答错了 {level6WrongCount} 个字，每错一字扣25分</p>
+                      <div className="text-xs text-gray-600 space-y-1">
+                        {level6SubmitResult.wrongPositions.map((pos, idx) => (
+                          <p key={idx}>第{pos.lineId}句：填了"{pos.filled}"，应该是"{pos.correct}"</p>
+                        ))}
+                      </div>
+                      <p className="text-amber-600 mt-2 text-xs">请修改错误后继续提交</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* 拖拽中的字 */}
               {charDragInfo && (
