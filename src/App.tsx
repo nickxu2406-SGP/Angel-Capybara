@@ -3,7 +3,7 @@ import yangyangImg from '/yangyang.png'
 import momImg from '/mom.png'
 import dengdengImg from '/dengdeng.png'
 
-type GameLevel = 0 | 1 | 2 | 3 | 4 | 5
+type GameLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6
 type GameState = 'menu' | 'playing' | 'won' | 'failed'
 type Winner = 'yangyang' | 'mom' | null
 
@@ -91,6 +91,17 @@ function App() {
   // 第五关数据
   const LEVEL5_TIME = 30
 
+  // 第六关数据
+  const LEVEL6_TIME = 30
+  type PoemLine = {
+    id: number
+    chars: string[]           // 整句拆分成字符
+    missingIndices: number[]  // 缺失字的位置
+    filled: (string | null)[] // 已填的字
+    options: string[]         // 该句的所有选项（正确答案+干扰项）
+    availableOptions: string[] // 当前可用的选项（未被使用的）
+  }
+
   type WordSlot = {
     wordId: number
     display: string[]        // 显示字符数组（含下划线）
@@ -139,9 +150,20 @@ function App() {
 
   const [level5TimeLeft, setLevel5TimeLeft] = useState(LEVEL5_TIME)
   const [wordSlots, setWordSlots] = useState<WordSlot[]>(makeLevel5Slots())
-  const [availableLetters, setAvailableLetters] = useState<string[]>(['I', 'U', 'A', 'I', 'O'])
-  const [draggedLetter, setDraggedLetter] = useState<string | null>(null)
+  const [availableLetters, setAvailableLetters] = useState<string[]>(['I', 'U', 'A', 'I', 'O', 'U'])
+  const [letterDragInfo, setLetterDragInfo] = useState<{ letter: string; index: number } | null>(null)
+  const [letterDragPosition, setLetterDragPosition] = useState({ x: 0, y: 0 })
   const level5TimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // 第六关状态
+  const [level6TimeLeft, setLevel6TimeLeft] = useState(LEVEL6_TIME)
+  const [poemLines, setPoemLines] = useState<PoemLine[]>([])
+  const level6TimerRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // 第六关拖拽状态
+  const [charDragInfo, setCharDragInfo] = useState<{ char: string; lineId: number; optionIndex: number } | null>(null)
+  const [charDragPosition, setCharDragPosition] = useState({ x: 0, y: 0 })
+  const poemAreaRef = useRef<HTMLDivElement>(null)
 
   // 第一关逻辑
   useEffect(() => {
@@ -259,6 +281,39 @@ function App() {
       }
     }
   }, [gameLevel, gameState, characters])
+
+  // 第六关：倒计时逻辑
+  useEffect(() => {
+    if (gameLevel === 6 && gameState === 'playing') {
+      level6TimerRef.current = setInterval(() => {
+        setLevel6TimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(level6TimerRef.current!)
+            setGameState('failed')
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+      
+      return () => {
+        if (level6TimerRef.current) clearInterval(level6TimerRef.current)
+      }
+    }
+  }, [gameLevel, gameState])
+
+  // 第六关：检查获胜
+  useEffect(() => {
+    if (gameLevel === 6 && gameState === 'playing') {
+      const allFilled = poemLines.every(line => 
+        line.missingIndices.every(idx => line.filled[idx] !== null)
+      )
+      if (allFilled && poemLines.length > 0) {
+        if (level6TimerRef.current) clearInterval(level6TimerRef.current)
+        setGameState('won')
+      }
+    }
+  }, [gameLevel, gameState, poemLines])
 
   const spawnFruit = () => {
     const newFruit: Fruit = {
@@ -458,17 +513,140 @@ function App() {
     setGameState('playing')
     setLevel5TimeLeft(LEVEL5_TIME)
     setWordSlots(makeLevel5Slots())
-    setAvailableLetters(['I', 'U', 'A', 'I', 'U'])
+    setAvailableLetters(['I', 'U', 'A', 'I', 'O', 'U'])
+    setLetterDragInfo(null)
   }
 
-  // 从字母槽拖出（点击字母后放置到单词槽）
-  const handleLetterDragStart = (letter: string) => {
-    setDraggedLetter(letter)
+  // ===== 第六关：古诗词背诵 =====
+  // 打乱数组顺序
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const newArray = [...array]
+    for (let i = newArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArray[i], newArray[j]] = [newArray[j], newArray[i]]
+    }
+    return newArray
   }
+
+  const makeLevel6Poem = (): PoemLine[] => {
+    const line1Options = shuffleArray(['暗', '看', '明', '晚'])
+    const line2Options = shuffleArray(['玉', '王', '国', '主'])
+    const line3Options = shuffleArray(['穿', '空', '过', '透'])
+    const line4Options = shuffleArray(['楼', '城', '关', '山'])
+    
+    return [
+      {
+        id: 1,
+        chars: ['青', '海', '长', '云', '暗', '雪', '山', '，'],
+        missingIndices: [4], // "暗"
+        filled: [null, null, null, null, null, null, null, null],
+        options: line1Options,
+        availableOptions: [...line1Options], // 初始时所有选项都可用
+      },
+      {
+        id: 2,
+        chars: ['孤', '城', '遥', '望', '玉', '门', '关', '。'],
+        missingIndices: [4], // "玉"
+        filled: [null, null, null, null, null, null, null, null],
+        options: line2Options,
+        availableOptions: [...line2Options],
+      },
+      {
+        id: 3,
+        chars: ['黄', '沙', '百', '战', '穿', '金', '甲', '，'],
+        missingIndices: [4], // "穿"
+        filled: [null, null, null, null, null, null, null, null],
+        options: line3Options,
+        availableOptions: [...line3Options],
+      },
+      {
+        id: 4,
+        chars: ['不', '破', '楼', '兰', '终', '不', '还', '。'],
+        missingIndices: [2], // "楼"
+        filled: [null, null, null, null, null, null, null, null],
+        options: line4Options,
+        availableOptions: [...line4Options],
+      },
+    ]
+  }
+
+  const startLevel6 = () => {
+    setGameLevel(6)
+    setGameState('playing')
+    setLevel6TimeLeft(LEVEL6_TIME)
+    setPoemLines(makeLevel6Poem())
+    setSelectedOption(null)
+    setSelectedSlot(null)
+  }
+
+  // ===== 第五关：字母拖拽处理（参考第四关做法） =====
+  const wordAreaRef = useRef<HTMLDivElement>(null)
+
+  const handleLetterDragStart = (e: React.MouseEvent | React.TouchEvent, letter: string, idx: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    setLetterDragInfo({ letter, index: idx })
+    setLetterDragPosition({ x: clientX, y: clientY })
+  }
+
+  const handleLetterDragMove = (e: MouseEvent | TouchEvent) => {
+    if (!letterDragInfo) return
+    e.preventDefault() // 防止触摸滚动
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    setLetterDragPosition({ x: clientX, y: clientY })
+  }
+
+  const handleLetterDragEnd = (e: MouseEvent | TouchEvent) => {
+    if (!letterDragInfo || !wordAreaRef.current) {
+      setLetterDragInfo(null)
+      return
+    }
+
+    // 遍历所有单词槽，检测释放位置在哪个槽上
+    const slots = wordAreaRef.current.querySelectorAll('[data-slot-id]')
+    const clientX = 'changedTouches' in e ? e.changedTouches[0].clientX : e.clientX
+    const clientY = 'changedTouches' in e ? e.changedTouches[0].clientY : e.clientY
+
+    let dropped = false
+    slots.forEach((slotEl) => {
+      if (dropped) return
+      const rect = slotEl.getBoundingClientRect()
+      if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+        const wordId = parseInt(slotEl.getAttribute('data-word-id') || '0')
+        const slotIndex = parseInt(slotEl.getAttribute('data-slot-index') || '0')
+        handleSlotDrop(wordId, slotIndex)
+        dropped = true
+      }
+    })
+
+    if (!dropped) {
+      setLetterDragInfo(null)
+    }
+  }
+
+  // 绑定字母拖拽事件
+  useEffect(() => {
+    if (letterDragInfo) {
+      window.addEventListener('mousemove', handleLetterDragMove)
+      window.addEventListener('mouseup', handleLetterDragEnd)
+      window.addEventListener('touchmove', handleLetterDragMove)
+      window.addEventListener('touchend', handleLetterDragEnd)
+      return () => {
+        window.removeEventListener('mousemove', handleLetterDragMove)
+        window.removeEventListener('mouseup', handleLetterDragEnd)
+        window.removeEventListener('touchmove', handleLetterDragMove)
+        window.removeEventListener('touchend', handleLetterDragEnd)
+      }
+    }
+  }, [letterDragInfo])
 
   // 放置字母到单词槽
   const handleSlotDrop = (wordId: number, slotIndex: number) => {
-    if (!draggedLetter) return
+    if (!letterDragInfo) return
+    const { letter, index: letterIdx } = letterDragInfo
     const slot = wordSlots.find(s => s.wordId === wordId)
     if (!slot || !slot.missingIndices.includes(slotIndex)) return
 
@@ -478,7 +656,7 @@ function App() {
     setWordSlots(prev => prev.map(s => {
       if (s.wordId !== wordId) return s
       const newFilled = [...s.filled]
-      newFilled[slotIndex] = draggedLetter
+      newFilled[slotIndex] = letter
       return { ...s, filled: newFilled }
     }))
 
@@ -489,14 +667,12 @@ function App() {
 
     // 从可用区移除拖出的字母
     setAvailableLetters(prev => {
-      const idx = prev.indexOf(draggedLetter!)
-      if (idx === -1) return prev
       const next = [...prev]
-      next.splice(idx, 1)
+      next.splice(letterIdx, 1)
       return next
     })
 
-    setDraggedLetter(null)
+    setLetterDragInfo(null)
   }
 
   // 从单词槽移除字母放回可用区
@@ -542,6 +718,144 @@ function App() {
     return wordSlots.every(slot =>
       slot.missingIndices.every(idx => slot.filled[idx] === slot.answer[idx])
     )
+  }
+
+  // ===== 第六关：古诗词处理函数 =====
+  
+  // 拖拽开始
+  const handleCharDragStart = (e: React.MouseEvent | React.TouchEvent, char: string, lineId: number, optionIdx: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    setCharDragInfo({ char, lineId, optionIndex: optionIdx })
+    setCharDragPosition({ x: clientX, y: clientY })
+  }
+
+  // 拖拽移动
+  const handleCharDragMove = (e: MouseEvent | TouchEvent) => {
+    if (!charDragInfo) return
+    e.preventDefault()
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    setCharDragPosition({ x: clientX, y: clientY })
+  }
+
+  // 拖拽结束
+  const handleCharDragEnd = (e: MouseEvent | TouchEvent) => {
+    if (!charDragInfo || !poemAreaRef.current) {
+      setCharDragInfo(null)
+      return
+    }
+
+    // 遍历所有空格，检测释放位置
+    const slots = poemAreaRef.current.querySelectorAll('[data-poem-slot]')
+    const clientX = 'changedTouches' in e ? e.changedTouches[0].clientX : e.clientX
+    const clientY = 'changedTouches' in e ? e.changedTouches[0].clientY : e.clientY
+
+    let dropped = false
+    slots.forEach((slotEl) => {
+      if (dropped) return
+      const rect = slotEl.getBoundingClientRect()
+      if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+        const lineId = parseInt(slotEl.getAttribute('data-line-id') || '0')
+        const charIndex = parseInt(slotEl.getAttribute('data-char-index') || '0')
+        handlePoemSlotDrop(lineId, charIndex)
+        dropped = true
+      }
+    })
+
+    if (!dropped) {
+      setCharDragInfo(null)
+    }
+  }
+
+  // 绑定第六关拖拽事件
+  useEffect(() => {
+    if (charDragInfo) {
+      window.addEventListener('mousemove', handleCharDragMove)
+      window.addEventListener('mouseup', handleCharDragEnd)
+      window.addEventListener('touchmove', handleCharDragMove)
+      window.addEventListener('touchend', handleCharDragEnd)
+      return () => {
+        window.removeEventListener('mousemove', handleCharDragMove)
+        window.removeEventListener('mouseup', handleCharDragEnd)
+        window.removeEventListener('touchmove', handleCharDragMove)
+        window.removeEventListener('touchend', handleCharDragEnd)
+      }
+    }
+  }, [charDragInfo])
+
+  // 放置字到诗句空格（支持替换）
+  const handlePoemSlotDrop = (targetLineId: number, charIndex: number) => {
+    if (!charDragInfo) return
+    const { char: newChar, lineId: sourceLineId } = charDragInfo
+    
+    const targetLine = poemLines.find(l => l.id === targetLineId)
+    if (!targetLine || !targetLine.missingIndices.includes(charIndex)) return
+
+    // 获取当前槽位已填的字（如果有）
+    const existingChar = targetLine.filled[charIndex]
+
+    setPoemLines(prev => prev.map(l => {
+      if (l.id !== targetLineId) return l
+      
+      const newFilled = [...l.filled]
+      newFilled[charIndex] = newChar
+      
+      // 更新可用选项
+      let newAvailable = [...l.availableOptions]
+      
+      // 从可用选项中移除新放入的字
+      const charIndexInAvailable = newAvailable.indexOf(newChar)
+      if (charIndexInAvailable > -1) {
+        newAvailable.splice(charIndexInAvailable, 1)
+      }
+      
+      // 如果有原字，把原字加回可用选项
+      if (existingChar) {
+        newAvailable.push(existingChar)
+      }
+      
+      return { ...l, filled: newFilled, availableOptions: newAvailable }
+    }))
+
+    setCharDragInfo(null)
+  }
+
+  // 移除已填的字（把字放回可用选项）
+  const removeFilledChar = (lineId: number, charIndex: number) => {
+    setPoemLines(prev => prev.map(line => {
+      if (line.id !== lineId) return line
+      const newFilled = [...line.filled]
+      const removedChar = newFilled[charIndex]
+      newFilled[charIndex] = null
+      
+      // 把字加回可用选项
+      const newAvailable = removedChar ? [...line.availableOptions, removedChar] : [...line.availableOptions]
+      
+      return { ...line, filled: newFilled, availableOptions: newAvailable }
+    }))
+  }
+
+  // 检查是否全部填满
+  const isPoemAllFilled = () => {
+    return poemLines.every(line => 
+      line.missingIndices.every(idx => line.filled[idx] !== null)
+    )
+  }
+
+  // 提交答案
+  const submitLevel6 = () => {
+    const allCorrect = poemLines.every(line => {
+      return line.missingIndices.every(idx => line.filled[idx] === line.chars[idx])
+    })
+    if (allCorrect) {
+      if (level6TimerRef.current) clearInterval(level6TimerRef.current)
+      setGameState('won')
+    } else {
+      alert('还有错误的字，请检查后再提交！')
+    }
   }
 
   return (
@@ -599,6 +913,12 @@ function App() {
                 className="w-full px-6 py-3 sm:py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-lg sm:text-2xl font-bold rounded-full hover:from-purple-600 hover:to-pink-600 transform hover:scale-105 transition-all shadow-lg"
               >
                 第五关：单词填空 ✏️
+              </button>
+              <button
+                onClick={startLevel6}
+                className="w-full px-6 py-3 sm:py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-lg sm:text-2xl font-bold rounded-full hover:from-amber-600 hover:to-orange-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                第六关：古诗词背诵 📜
               </button>
             </div>
           </div>
@@ -1122,6 +1442,12 @@ function App() {
 
             <div className="space-y-3">
               <button
+                onClick={startLevel5}
+                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-green-600 hover:to-emerald-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                下一关 ➡️
+              </button>
+              <button
                 onClick={startLevel4}
                 className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-orange-600 hover:to-yellow-600 transform hover:scale-105 transition-all shadow-lg"
               >
@@ -1174,24 +1500,28 @@ function App() {
         {gameLevel === 5 && gameState === 'playing' && (
           <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
             {/* 顶部标题栏 */}
-            <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-2 sm:p-4 text-center">
-              <div className="text-white text-lg sm:text-2xl font-bold mb-1">
-                ✏️ 单词填空 - 把字母拖到单词中！
+            <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-3 py-2 text-center">
+              <div className="text-white text-sm font-bold mb-1">
+                ✏️ 单词填空 - 拖动字母到单词中！
               </div>
-              <div className={`text-3xl sm:text-5xl font-bold ${level5TimeLeft <= 10 ? 'text-red-300 animate-pulse' : 'text-yellow-300'}`}>
+              <div className={`text-2xl font-bold ${level5TimeLeft <= 10 ? 'text-red-300 animate-pulse' : 'text-yellow-300'}`}>
                 ⏱️ {level5TimeLeft}s
               </div>
             </div>
 
-            {/* 游戏区域 */}
-            <div className="p-3 sm:p-6 bg-gradient-to-b from-purple-50 to-pink-50 min-h-[400px] sm:min-h-[500px]">
+            {/* 游戏区域 - touch-none 防止触摸滚动 */}
+            <div
+              ref={wordAreaRef}
+              className="p-3 bg-gradient-to-b from-purple-50 to-pink-50 touch-none overflow-hidden"
+              style={{ maxHeight: 'calc(100vh - 160px)' }}
+            >
 
               {/* 单词列表 */}
-              <div className="space-y-4 mb-6">
+              <div className="space-y-3 mb-3">
                 {wordSlots.map((slot) => (
-                  <div key={slot.wordId} className="bg-white rounded-2xl p-3 sm:p-4 shadow-md">
-                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                      <span className="text-gray-400 text-sm font-bold w-6">{slot.wordId}.</span>
+                  <div key={slot.wordId} className="bg-white rounded-xl px-3 py-2 shadow">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-gray-400 text-xs font-bold w-4">{slot.wordId}.</span>
                       {slot.display.map((char, idx) => {
                         const isMissing = slot.missingIndices.includes(idx)
                         const filledLetter = slot.filled[idx]
@@ -1199,24 +1529,24 @@ function App() {
                           <div key={idx} className="flex flex-col items-center">
                             {isMissing ? (
                               <div
-                                onClick={() => filledLetter ? handleSlotRemove(slot.wordId, idx) : undefined}
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={() => handleSlotDrop(slot.wordId, idx)}
-                                onMouseDown={() => draggedLetter && handleSlotDrop(slot.wordId, idx)}
+                                data-slot-id="true"
+                                data-word-id={slot.wordId}
+                                data-slot-index={idx}
+                                onClick={() => !letterDragInfo && filledLetter && handleSlotRemove(slot.wordId, idx)}
+                                style={{ touchAction: 'none' }}
                                 className={`
-                                  w-10 h-12 sm:w-14 sm:h-16 rounded-xl border-2 border-dashed flex items-center justify-center text-xl sm:text-3xl font-bold
-                                  transition-all cursor-pointer select-none
+                                  w-9 h-11 rounded-lg border-2 border-dashed flex items-center justify-center text-lg font-bold
+                                  transition-all select-none
                                   ${filledLetter
-                                    ? 'border-green-400 bg-green-50 text-green-600 shadow-sm hover:bg-red-50 hover:border-red-300'
-                                    : 'border-purple-300 bg-purple-50 text-purple-300 hover:border-purple-400 hover:bg-purple-100'
+                                    ? 'border-green-400 bg-green-50 text-green-600 shadow-sm cursor-pointer'
+                                    : 'border-purple-300 bg-purple-50 text-purple-300'
                                   }
                                 `}
-                                style={{ minWidth: '2.5rem' }}
                               >
-                                {filledLetter || <span className="text-purple-300 text-lg">_</span>}
+                                {filledLetter || <span className="text-purple-300 text-base">_</span>}
                               </div>
                             ) : (
-                              <div className="w-10 h-12 sm:w-14 sm:h-16 flex items-center justify-center text-xl sm:text-3xl font-bold text-gray-800">
+                              <div className="w-9 h-11 flex items-center justify-center text-lg font-bold text-gray-800">
                                 {char}
                               </div>
                             )}
@@ -1229,21 +1559,16 @@ function App() {
               </div>
 
               {/* 字母选择区 */}
-              <div className="bg-white rounded-2xl p-3 sm:p-5 shadow-lg border-2 border-purple-200">
-                <p className="text-center text-purple-500 text-sm font-bold mb-3">📚 可用字母（点击字母后点击单词槽放置）</p>
-                <div className="flex justify-center gap-2 sm:gap-3 flex-wrap">
+              <div className="bg-white rounded-xl px-3 py-2 shadow border-2 border-purple-200">
+                <p className="text-center text-purple-500 text-xs font-bold mb-2">📚 拖动字母放进单词槽</p>
+                <div className="flex justify-center gap-2 flex-wrap">
                   {availableLetters.map((letter, idx) => (
                     <div
                       key={`${letter}-${idx}`}
-                      onClick={() => handleLetterDragStart(letter)}
-                      className={`
-                        w-12 h-14 sm:w-16 sm:h-18 rounded-xl flex items-center justify-center text-2xl sm:text-4xl font-bold cursor-pointer
-                        transition-all transform select-none
-                        ${draggedLetter === letter
-                          ? 'bg-purple-600 text-white scale-110 shadow-xl ring-4 ring-purple-300'
-                          : 'bg-gradient-to-br from-purple-400 to-pink-400 text-white shadow-md hover:scale-110 hover:shadow-xl active:scale-95'
-                        }
-                      `}
+                      onMouseDown={(e) => handleLetterDragStart(e, letter, idx)}
+                      onTouchStart={(e) => handleLetterDragStart(e, letter, idx)}
+                      style={{ touchAction: 'none' }}
+                      className="w-10 h-11 rounded-lg flex items-center justify-center text-xl font-bold cursor-grab active:cursor-grabbing select-none bg-gradient-to-br from-purple-400 to-pink-400 text-white shadow-md hover:shadow-xl active:scale-95 transition-all"
                     >
                       {letter}
                     </div>
@@ -1252,19 +1577,19 @@ function App() {
               </div>
 
               {/* 操作提示 */}
-              <div className="text-center mt-4 text-sm text-purple-500">
-                💡 先点击字母选中，再点击单词槽中的空白处放置 | 点击已填字母可取回
+              <div className="text-center mt-2 text-xs text-purple-500">
+                💡 拖动字母放入单词槽 | 点击已填字母可取回
               </div>
 
               {/* 提交按钮 */}
-              <div className="mt-4 text-center">
+              <div className="mt-2 text-center">
                 <button
                   onClick={submitLevel5}
                   disabled={!isAllFilled()}
                   className={`
-                    px-8 py-3 text-xl font-bold rounded-full transition-all shadow-lg
+                    px-6 py-2 text-lg font-bold rounded-full transition-all shadow
                     ${isAllFilled()
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 transform hover:scale-105'
+                      ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     }
                   `}
@@ -1272,9 +1597,23 @@ function App() {
                   ✅ 提交答案
                 </button>
                 {!isAllFilled() && (
-                  <p className="text-xs text-gray-400 mt-1">先把所有字母放进单词槽再提交</p>
+                  <p className="text-xs text-gray-400 mt-1">先把所有字母放进单词槽</p>
                 )}
               </div>
+
+              {/* 拖拽中的字母（跟第四关一样的写法） */}
+              {letterDragInfo && (
+                <div
+                  className="fixed pointer-events-none z-50 w-10 h-11 rounded-lg flex items-center justify-center text-xl font-bold bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-2xl select-none"
+                  style={{
+                    left: letterDragPosition.x,
+                    top: letterDragPosition.y,
+                    transform: 'translate(-50%, -50%)'
+                  }}
+                >
+                  {letterDragInfo.letter}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1339,6 +1678,209 @@ function App() {
               <button
                 onClick={startLevel5}
                 className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-purple-600 hover:to-pink-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                重新挑战 💪
+              </button>
+              <button
+                onClick={backToMenu}
+                className="w-full px-6 py-3 bg-gray-200 text-gray-700 text-lg font-bold rounded-full hover:bg-gray-300 transition-all"
+              >
+                返回菜单
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 第六关：古诗词背诵 */}
+        {gameLevel === 6 && gameState === 'playing' && (
+          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ maxHeight: '100vh' }}>
+            {/* 顶部标题栏 - 诗名和作者 */}
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-2 py-2 text-center">
+              <div className="text-white text-base font-bold">
+                《从军行》
+              </div>
+              <div className="text-white text-xs mb-1">
+                唐 · 王昌龄
+              </div>
+              <div className={`text-xl font-bold ${level6TimeLeft <= 10 ? 'text-red-300 animate-pulse' : 'text-yellow-300'}`}>
+                ⏱️ {level6TimeLeft}s
+              </div>
+            </div>
+
+            {/* 游戏区域 - touch-none 防止触摸滚动 */}
+            <div 
+              ref={poemAreaRef}
+              className="p-2 bg-gradient-to-b from-amber-50 to-orange-50 touch-none overflow-hidden"
+            >
+
+              {/* 诗句区域 - 紧凑布局 */}
+              <div className="space-y-1 mb-2">
+                {poemLines.map((line) => (
+                  <div key={line.id} className="bg-white rounded-lg px-2 py-1 shadow flex items-center justify-center">
+                    {line.chars.map((char, idx) => {
+                      const isMissing = line.missingIndices.includes(idx)
+                      const filledChar = line.filled[idx]
+                      return (
+                        <div key={idx} className="inline-flex">
+                          {isMissing ? (
+                            <div
+                              data-poem-slot="true"
+                              data-line-id={line.id}
+                              data-char-index={idx}
+                              onClick={() => !charDragInfo && filledChar && removeFilledChar(line.id, idx)}
+                              style={{ touchAction: 'none' }}
+                              className={`
+                                w-8 h-10 rounded border-2 border-dashed flex items-center justify-center text-lg font-bold mx-0.5
+                                transition-all select-none
+                                ${filledChar
+                                  ? 'border-green-400 bg-green-50 text-green-600 shadow-sm cursor-pointer'
+                                  : 'border-amber-300 bg-amber-50 text-amber-300'
+                                }
+                              `}
+                            >
+                              {filledChar || <span className="text-amber-300">_</span>}
+                            </div>
+                          ) : (
+                            <div className="w-8 h-10 flex items-center justify-center text-lg font-bold text-gray-800 mx-0.5">
+                              {char}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              {/* 选项区域 - 四行显示，每行4个字 */}
+              <div className="bg-white rounded-lg px-2 py-2 shadow border-2 border-amber-200">
+                <p className="text-center text-amber-600 text-xs font-bold mb-1">
+                  📚 拖动字到空格
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  {poemLines.flatMap((line) => 
+                    line.availableOptions.map((option, idx) => (
+                      <div
+                        key={`${line.id}-${option}-${idx}`}
+                        onMouseDown={(e) => handleCharDragStart(e, option, line.id, idx)}
+                        onTouchStart={(e) => handleCharDragStart(e, option, line.id, idx)}
+                        style={{ touchAction: 'none' }}
+                        className="w-10 h-10 rounded flex items-center justify-center text-lg font-bold cursor-grab active:cursor-grabbing select-none bg-gradient-to-br from-amber-400 to-orange-400 text-white shadow active:scale-95 transition-all"
+                      >
+                        {option}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* 操作提示 - 更紧凑 */}
+              <div className="text-center mt-1 text-xs text-amber-500">
+                💡 拖动字放入空格 | 点击已填的字可取回
+              </div>
+
+              {/* 提交按钮 */}
+              <div className="mt-3 text-center">
+                <button
+                  onClick={submitLevel6}
+                  disabled={!isPoemAllFilled()}
+                  className={`
+                    px-6 py-2 text-lg font-bold rounded-full transition-all shadow
+                    ${isPoemAllFilled()
+                      ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }
+                  `}
+                >
+                  ✅ 提交答案
+                </button>
+                {!isPoemAllFilled() && (
+                  <p className="text-xs text-gray-400 mt-1">先把所有字放进诗句中</p>
+                )}
+              </div>
+
+              {/* 拖拽中的字 */}
+              {charDragInfo && (
+                <div
+                  className="fixed pointer-events-none z-50 w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-2xl select-none"
+                  style={{
+                    left: charDragPosition.x,
+                    top: charDragPosition.y,
+                    transform: 'translate(-50%, -50%)'
+                  }}
+                >
+                  {charDragInfo.char}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 第六关胜利 */}
+        {gameLevel === 6 && gameState === 'won' && (
+          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8 text-center">
+            <h2 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6 text-green-600">🎉 太棒了！🎉</h2>
+            <div className="mb-6 sm:mb-8">
+              <div className="text-6xl sm:text-8xl mb-6">📜</div>
+              <p className="text-2xl sm:text-4xl font-bold text-gray-800 mb-4">
+                古诗背诵成功！
+              </p>
+              <p className="text-xl sm:text-2xl text-gray-600 mb-4">
+                用时: {LEVEL6_TIME - level6TimeLeft} 秒
+              </p>
+              <div className="bg-amber-50 rounded-xl p-4 mt-4">
+                <p className="text-amber-700 font-bold text-xl mb-2">从军行</p>
+                <p className="text-amber-500 text-sm mb-3">唐 · 王昌龄</p>
+                <div className="space-y-1 text-lg text-gray-700">
+                  <p>青海长云暗雪山，</p>
+                  <p>孤城遥望玉门关。</p>
+                  <p>黄沙百战穿金甲，</p>
+                  <p>不破楼兰终不还。</p>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={startLevel6}
+                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-amber-600 hover:to-orange-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                再背一次 🔄
+              </button>
+              <button
+                onClick={backToMenu}
+                className="w-full px-6 py-3 bg-gray-200 text-gray-700 text-lg font-bold rounded-full hover:bg-gray-300 transition-all"
+              >
+                返回菜单
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 第六关失败 */}
+        {gameLevel === 6 && gameState === 'failed' && (
+          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8 text-center">
+            <h2 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6 text-red-600">
+              ⏰ 时间到！
+            </h2>
+            <div className="mb-6 sm:mb-8">
+              <div className="text-6xl sm:text-8xl mb-6">😢</div>
+              <p className="text-2xl sm:text-4xl font-bold text-gray-800 mb-4">
+                没能在时间内完成背诵！
+              </p>
+              <div className="bg-amber-50 rounded-xl p-4 mt-4">
+                <p className="text-amber-700 font-bold text-xl mb-2">正确答案</p>
+                <div className="space-y-1 text-lg text-gray-700">
+                  <p>青海长云<span className="text-green-600 font-bold">暗</span>雪山，</p>
+                  <p>孤城遥望<span className="text-green-600 font-bold">玉</span>门关。</p>
+                  <p>黄沙百战<span className="text-green-600 font-bold">穿</span>金甲，</p>
+                  <p>不<span className="text-green-600 font-bold">破</span>楼兰终不还。</p>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={startLevel6}
+                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-amber-600 hover:to-orange-600 transform hover:scale-105 transition-all shadow-lg"
               >
                 重新挑战 💪
               </button>
