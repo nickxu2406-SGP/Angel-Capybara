@@ -3,7 +3,7 @@ import yangyangImg from '/yangyang.png'
 import momImg from '/mom.png'
 import dengdengImg from '/dengdeng.png'
 
-type GameLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6
+type GameLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7
 type GameState = 'menu' | 'playing' | 'won' | 'failed'
 type Winner = 'yangyang' | 'mom' | null
 
@@ -167,6 +167,19 @@ function App() {
   const [charDragInfo, setCharDragInfo] = useState<{ char: string; lineId: number; optionIndex: number } | null>(null)
   const [charDragPosition, setCharDragPosition] = useState({ x: 0, y: 0 })
   const poemAreaRef = useRef<HTMLDivElement>(null)
+
+  // 第七关：游泳比赛状态
+  const [level7TimeLeft, setLevel7TimeLeft] = useState(30)
+  const [swimmers, setSwimmers] = useState([
+    { id: 'yangyang', name: '洋洋', img: yangyangImg, position: 0, speed: 0, finished: false, finishTime: 0 },
+    { id: 'dengdeng', name: '等等', img: dengdengImg, position: 0, speed: 0, finished: false, finishTime: 0 },
+    { id: 'mom', name: '妈妈', img: momImg, position: 0, speed: 0, finished: false, finishTime: 0 },
+    { id: 'capybara', name: '卡皮巴拉', img: '', position: 0, speed: 0, finished: false, finishTime: 0 },
+  ])
+  const [level7Winner, setLevel7Winner] = useState<string | null>(null)
+  const [level7Started, setLevel7Started] = useState(false)
+  const level7TimerRef = useRef<NodeJS.Timeout | null>(null)
+  const level7GameLoopRef = useRef<NodeJS.Timeout | null>(null)
 
   // 第一关逻辑
   useEffect(() => {
@@ -574,6 +587,82 @@ function App() {
     setLevel6SubmitResult({show: false, wrongPositions: []})
   }
 
+  // 第七关：游泳比赛
+  const startLevel7 = () => {
+    setGameLevel(7)
+    setGameState('playing')
+    setLevel7TimeLeft(30)
+    setLevel7Winner(null)
+    setLevel7Started(false)
+    setSwimmers([
+      { id: 'yangyang', name: '洋洋', img: yangyangImg, position: 0, speed: 0, finished: false, finishTime: 0 },
+      { id: 'dengdeng', name: '等等', img: dengdengImg, position: 0, speed: 0, finished: false, finishTime: 0 },
+      { id: 'mom', name: '妈妈', img: momImg, position: 0, speed: 0, finished: false, finishTime: 0 },
+      { id: 'capybara', name: '卡皮巴拉', img: '', position: 0, speed: 0, finished: false, finishTime: 0 },
+    ])
+  }
+
+  // 第七关：开始游泳
+  const startSwimming = () => {
+    setLevel7Started(true)
+    const startTime = Date.now()
+    
+    // 倒计时
+    level7TimerRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000)
+      const remaining = Math.max(0, 30 - elapsed)
+      setLevel7TimeLeft(remaining)
+      
+      if (remaining <= 0) {
+        // 时间到，结束比赛
+        if (level7TimerRef.current) clearInterval(level7TimerRef.current)
+        if (level7GameLoopRef.current) clearInterval(level7GameLoopRef.current)
+        setGameState('won')
+      }
+    }, 100)
+
+    // 游戏循环 - 更新位置
+    level7GameLoopRef.current = setInterval(() => {
+      setSwimmers(prev => {
+        const updated = prev.map(swimmer => {
+          if (swimmer.finished) return swimmer
+          
+          // 随机速度，每个角色有不同的基础速度
+          const baseSpeeds: Record<string, number> = {
+            yangyang: 2.5,
+            dengdeng: 2.0,
+            mom: 2.2,
+            capybara: 2.8
+          }
+          const baseSpeed = baseSpeeds[swimmer.id] || 2
+          const randomBoost = Math.random() * 3 // 随机加速
+          const newSpeed = baseSpeed + randomBoost
+          const newPosition = Math.min(100, swimmer.position + newSpeed * 0.1)
+          
+          // 到达终点
+          if (newPosition >= 100 && !swimmer.finished) {
+            return { ...swimmer, position: 100, speed: 0, finished: true, finishTime: Date.now() }
+          }
+          
+          return { ...swimmer, position: newPosition, speed: newSpeed }
+        })
+        
+        // 检查是否有人完成并确定冠军
+        const finishedSwimmers = updated.filter(s => s.finished)
+        if (finishedSwimmers.length > 0 && !level7Winner) {
+          // 按完成时间排序
+          const winner = finishedSwimmers.sort((a, b) => a.finishTime - b.finishTime)[0]
+          setLevel7Winner(winner.id)
+          setGameState('won')
+          if (level7TimerRef.current) clearInterval(level7TimerRef.current)
+          if (level7GameLoopRef.current) clearInterval(level7GameLoopRef.current)
+        }
+        
+        return updated
+      })
+    }, 50) // 每50ms更新一次
+  }
+
   // ===== 第五关：字母拖拽处理（参考第四关做法） =====
   const wordAreaRef = useRef<HTMLDivElement>(null)
 
@@ -935,6 +1024,12 @@ function App() {
                 className="w-full px-6 py-3 sm:py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-lg sm:text-2xl font-bold rounded-full hover:from-amber-600 hover:to-orange-600 transform hover:scale-105 transition-all shadow-lg"
               >
                 第六关：古诗词背诵 📜
+              </button>
+              <button
+                onClick={startLevel7}
+                className="w-full px-6 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-lg sm:text-2xl font-bold rounded-full hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                第七关：游泳比赛 🏊
               </button>
             </div>
           </div>
@@ -1921,6 +2016,192 @@ function App() {
               <button
                 onClick={startLevel6}
                 className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-amber-600 hover:to-orange-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                重新挑战 💪
+              </button>
+              <button
+                onClick={backToMenu}
+                className="w-full px-6 py-3 bg-gray-200 text-gray-700 text-lg font-bold rounded-full hover:bg-gray-300 transition-all"
+              >
+                返回菜单
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 第七关：游泳比赛 */}
+        {gameLevel === 7 && gameState === 'playing' && (
+          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6">
+            {/* 标题栏 */}
+            <div className="text-center mb-4">
+              <h2 className="text-2xl sm:text-3xl font-bold text-blue-600">🏊 50米自由泳比赛</h2>
+              <p className="text-sm text-blue-400">华东师范大学游泳馆</p>
+            </div>
+
+            {/* 倒计时 */}
+            <div className="text-center mb-4">
+              <div className="text-4xl font-bold text-red-500">{level7TimeLeft}</div>
+              <p className="text-sm text-gray-500">秒</p>
+            </div>
+
+            {/* 泳池 */}
+            <div className="relative bg-gradient-to-b from-blue-400 to-blue-600 rounded-xl p-4 mb-4 overflow-hidden">
+              {/* 泳道线 */}
+              <div className="absolute inset-0 opacity-20">
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} className="h-1/4 border-b-2 border-white border-dashed" />
+                ))}
+              </div>
+
+              {/* 泳道 */}
+              <div className="space-y-3 relative">
+                {swimmers.map((swimmer, idx) => (
+                  <div key={swimmer.id} className="relative h-12 bg-blue-300/30 rounded-lg flex items-center px-2">
+                    {/* 起点标志 */}
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-white/50" />
+                    
+                    {/* 终点标志 */}
+                    <div className="absolute right-0 top-0 bottom-0 w-1 bg-red-500/50" />
+
+                    {/* 游泳者 */}
+                    <div
+                      className="absolute transition-all duration-100"
+                      style={{ left: `${swimmer.position}%`, transform: 'translateX(-50%)' }}
+                    >
+                      {swimmer.id === 'capybara' ? (
+                        <div className="text-3xl">🦫</div>
+                      ) : (
+                        <img
+                          src={swimmer.img}
+                          alt={swimmer.name}
+                          className="w-10 h-10 rounded-full border-2 border-white shadow-lg object-cover"
+                        />
+                      )}
+                    </div>
+
+                    {/* 名字标签 */}
+                    <span className="absolute left-2 text-xs text-white font-bold bg-black/30 px-2 py-1 rounded">
+                      {swimmer.name}
+                    </span>
+
+                    {/* 完成标记 */}
+                    {swimmer.finished && (
+                      <span className="absolute right-2 text-lg">🏁</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 开始按钮 */}
+            {!level7Started ? (
+              <div className="text-center">
+                <button
+                  onClick={startSwimming}
+                  className="px-8 py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-2xl font-bold rounded-full hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all shadow-lg"
+                >
+                  🏊 开始比赛！
+                </button>
+                <p className="text-sm text-gray-500 mt-2">点击开始50米自由泳比赛</p>
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 text-sm">
+                🏊 比赛进行中... 看谁能先到终点！
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 第七关胜利 */}
+        {gameLevel === 7 && gameState === 'won' && level7Winner && (
+          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8 text-center">
+            <h2 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6 text-yellow-600">🏆 冠军诞生！</h2>
+            
+            <div className="mb-6 sm:mb-8">
+              {/* 获胜者和卡皮巴拉合照 */}
+              <div className="flex justify-center items-end gap-4 mb-6">
+                {swimmers.find(s => s.id === level7Winner)?.img ? (
+                  <img
+                    src={swimmers.find(s => s.id === level7Winner)?.img}
+                    alt="冠军"
+                    className="w-28 h-28 sm:w-36 sm:h-36 rounded-full object-cover border-4 border-yellow-400 shadow-xl"
+                  />
+                ) : (
+                  <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-yellow-100 border-4 border-yellow-400 shadow-xl flex items-center justify-center text-6xl">
+                    🦫
+                  </div>
+                )}
+                <div className="text-6xl sm:text-8xl">🤗</div>
+                <div className="text-6xl sm:text-8xl">🦫</div>
+              </div>
+              
+              <p className="text-2xl sm:text-4xl font-bold text-gray-800 mb-2">
+                {swimmers.find(s => s.id === level7Winner)?.name} 获得冠军！
+              </p>
+              <p className="text-lg text-gray-600 mb-4">
+                获胜者抱着卡皮巴拉拍照留念 📸
+              </p>
+
+              {/* 比赛结果 */}
+              <div className="bg-blue-50 rounded-xl p-4 mt-4">
+                <p className="text-blue-700 font-bold mb-3">🏊 比赛结果</p>
+                <div className="space-y-2">
+                  {swimmers
+                    .sort((a, b) => {
+                      if (a.finished && b.finished) return a.finishTime - b.finishTime
+                      if (a.finished) return -1
+                      if (b.finished) return 1
+                      return b.position - a.position
+                    })
+                    .map((swimmer, idx) => (
+                      <div key={swimmer.id} className="flex items-center justify-center gap-2 text-sm">
+                        <span className="text-lg">
+                          {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '4️⃣'}
+                        </span>
+                        <span className="font-bold">{swimmer.name}</span>
+                        <span className="text-gray-500">
+                          {swimmer.finished ? '完成' : `${Math.floor(swimmer.position)}%`}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={startLevel7}
+                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all shadow-lg"
+              >
+                再比一次 🏊
+              </button>
+              <button
+                onClick={backToMenu}
+                className="w-full px-6 py-3 bg-gray-200 text-gray-700 text-lg font-bold rounded-full hover:bg-gray-300 transition-all"
+              >
+                返回菜单
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 第七关失败（时间到） */}
+        {gameLevel === 7 && gameState === 'failed' && (
+          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-8 text-center">
+            <h2 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6 text-red-600">⏰ 时间到！</h2>
+            <div className="mb-6 sm:mb-8">
+              <div className="text-6xl sm:text-8xl mb-6">😢</div>
+              <p className="text-2xl sm:text-4xl font-bold text-gray-800 mb-4">
+                30秒内没人到达终点
+              </p>
+              <p className="text-lg text-gray-600">
+                大家都游得太慢了...
+              </p>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={startLevel7}
+                className="w-full px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xl sm:text-2xl font-bold rounded-full hover:from-blue-600 hover:to-cyan-600 transform hover:scale-105 transition-all shadow-lg"
               >
                 重新挑战 💪
               </button>
