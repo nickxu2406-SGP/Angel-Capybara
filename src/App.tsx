@@ -627,12 +627,12 @@ function App() {
         const updated = prev.map(swimmer => {
           if (swimmer.finished) return swimmer
           
-          // 随机速度，每个角色有不同的基础速度
+          // 随机速度，每个角色有不同的基础速度（洋洋最快，卡皮巴拉最慢）
           const baseSpeeds: Record<string, number> = {
-            yangyang: 2.5,
-            dengdeng: 2.0,
-            mom: 2.2,
-            capybara: 2.8
+            yangyang: 3.0,
+            dengdeng: 1.8,
+            mom: 2.5,
+            capybara: 1.2
           }
           const baseSpeed = baseSpeeds[swimmer.id] || 2
           const randomBoost = Math.random() * 3 // 随机加速
